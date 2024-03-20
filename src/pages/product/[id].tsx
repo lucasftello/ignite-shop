@@ -1,47 +1,33 @@
-import { useState } from "react"
-import Head from "next/head"
-import Image from "next/image"
-import Stripe from "stripe"
-import { stripe } from "@/src/lib/stripe"
-import { ImageContainer, ProductContainer, ProductDetails } from "@/src/styles/pages/product"
-import { GetStaticPaths, GetStaticProps } from "next"
-import axios from "axios"
-import { useRouter } from "next/router"
+import { useContext } from 'react'
+import Head from 'next/head'
+import Image from 'next/image'
+import Stripe from 'stripe'
+import { stripe } from '@/src/lib/stripe'
+import {
+  ImageContainer,
+  ProductContainer,
+  ProductDetails,
+} from '@/src/styles/pages/product'
+import { GetStaticPaths, GetStaticProps } from 'next'
+import { useRouter } from 'next/router'
+import { DefaultButton } from '@/src/components/DefaultButton'
+import { CartContext, Product } from '@/src/contexts/CartContext'
+import { priceFormatter } from '@/src/utils/priceFormatter'
 
 interface ProductProps {
-  product: {
-    id: string
-    name: string
-    imageUrl: string
-    price: string,
-    description: string
-    defaultPriceId: string
-  }
+  product: Product
 }
 
 export default function Product({ product }: ProductProps) {
   const { isFallback } = useRouter()
-  const [isCreatingCheckoutSession, setIsCreatingCheckoutSession] = useState(false)
 
-  async function handleBuyProduct() {
-    try {
-      setIsCreatingCheckoutSession(true)
+  const { addProduct } = useContext(CartContext)
 
-      const response = await axios.post('/api/checkout', {
-        priceId: product.defaultPriceId
-      })
-
-      const { checkoutUrl } = response.data
-
-      window.location.href = checkoutUrl
-    } catch (error) {
-      setIsCreatingCheckoutSession(false)
-
-      alert('Falha ao redirecionar ao checkout')
-    }
+  function handleAddProductToCart(product: Product) {
+    addProduct(product)
   }
 
-  if (isFallback) { 
+  if (isFallback) {
     return <p>Loading...</p>
   }
 
@@ -51,41 +37,41 @@ export default function Product({ product }: ProductProps) {
         <title>{product.name} - Ignite Shop</title>
       </Head>
 
-      
-    <ProductContainer>
-      <ImageContainer>
-        <Image src={product.imageUrl} width={520} height={400} alt="" />
-      </ImageContainer>
+      <ProductContainer>
+        <ImageContainer>
+          <Image src={product.imageUrl} width={520} height={400} alt="" />
+        </ImageContainer>
 
-      <ProductDetails>
-        <h1>{product.name}</h1>
-        <span>{product.price}</span>
+        <ProductDetails>
+          <h1>{product.name}</h1>
+          <span>{product.price}</span>
 
-        <p>{product.description}</p>
-      
-        <button onClick={handleBuyProduct} disabled={isCreatingCheckoutSession}>
-          Comprar agora
-        </button>
-      </ProductDetails>
-    </ProductContainer>
+          <p>{product.description}</p>
+
+          <DefaultButton
+            text="Colocar na sacola"
+            onClick={() => handleAddProductToCart(product)}
+          />
+        </ProductDetails>
+      </ProductContainer>
     </>
   )
 }
 
 export const getStaticPaths: GetStaticPaths = async () => {
   return {
-    paths: [
-      { params: { id: 'prod_PiajsGIOFCaNBN' } }
-    ],
-    fallback: true
+    paths: [{ params: { id: 'prod_PiajsGIOFCaNBN' } }],
+    fallback: true,
   }
 }
 
-export const getStaticProps: GetStaticProps<any, { id: string }> = async ({ params }) => {
+export const getStaticProps: GetStaticProps<any, { id: string }> = async ({
+  params,
+}) => {
   const productId = params!.id
 
   const product = await stripe.products.retrieve(productId, {
-    expand: ['default_price']
+    expand: ['default_price'],
   })
 
   const price = product.default_price as Stripe.Price
@@ -96,13 +82,10 @@ export const getStaticProps: GetStaticProps<any, { id: string }> = async ({ para
         id: product.id,
         name: product.name,
         imageUrl: product.images[0],
-        price: new Intl.NumberFormat('pt-BR', {
-          style: 'currency',
-          currency: 'BRL'
-        }).format(price.unit_amount! / 100),
         description: product.description,
-        defaultPriceId: price.id
-      }
+        price: priceFormatter(price.unit_amount! / 100),
+        defaultPriceId: price.id,
+      },
     },
     revalidate: 60 * 60 * 1,
   }
